@@ -15,10 +15,11 @@ module Buildr
       def version
         settings['version'] || VERSION
       end
-
+      
       def dependencies
         @dependencies ||= [
-          'net.sourceforge.findbugs:findbugs-ant:jar:#{version}',
+          "net.sourceforge.findbugs:findbugs-ant:jar:#{version}"
+=begin
           'net.sourceforge.findbugs:findbugs:jar:#{version}',
           'net.sourceforge.findbugs:bcel:jar:#{version}',
           'net.sourceforge.findbugs:coreplugin:jar:#{version}',
@@ -30,26 +31,48 @@ module Buildr
           'asm:asm-util:jar:3.0',
           'asm:asm-xml:jar:3.0',
           'dom4j:dom4j:jar:1.3',
+=end
         ]
       end
 
       def findbugs
         unless @findbugs
           @findbugs = FindbugsConfig.new(self)
-          #@findbugs.report_dir('reports/checkstyle')
-          #@findbugs.data_file('reports/checkstyle.data')
+          #@findbugs.report_dir('reports/findbugs')
+          #@findbugs.output_file('reports/findbugs.data')
         end
         @findbugs
       end
 
       # Create text output for given config
-      def create_stdout(config)
+      def create_text(config)
         info "Running findbugs with results printed to stdout"
-        config.ant.findbugs :output => "text",
-          :effort => config.effort do
-          auxClasspath = config.aux_classpath
-          srcPath :path => config.src_path
-          #class :location => config.class_location
+        config.ant.findbugs :home=>config.findbugs_home,
+            :output => "text",
+            :effort => config.effort,
+            :failOnError => config.fail_on_error do
+          #    puts "attributes: #{config.ant.inspect}"
+          puts "auxclasspath: #{config.aux_classpath}, #{config.aux_classpath == nil}"
+          if config.aux_classpath != nil
+            config.ant.auxClasspath = config.aux_classpath
+          end
+          config.ant.sourcePath :path => config.src_path
+          config.ant.method_missing :class, :location => config.class_location
+          #config.ant.auxAnalyzepath :location => config.class_location
+        end
+      end
+
+      # Create xml output for given config
+      def create_xml(config)
+        info "Running findbugs with results written to xml output file"
+        config.ant.findbugs :home=>config.findbugs_home,
+            :output => "xml",
+            :outputFile => config.findbugs.output_file,
+            :effort => config.effort,
+            :failOnError => config.fail_on_error do
+          config.ant.auxClasspath = config.aux_classpath
+          config.ant.sourcePath :path => config.src_path
+          #config.ant.class :location => config.class_location
         end
       end
       
@@ -69,9 +92,9 @@ module Buildr
       # Create the xml report for given config
       def create_xml(config)
         mkdir_p config.report_to.to_s
-        info "Creating checkstyle xml report #{config.data_file}"
+        info "Creating checkstyle xml report #{config.output_file}"
         config.ant.checkstyle :config => config.config,
-          :failureProperty => config.failure_property, :failOnViolation => config.fail_on_violation,
+          :failureProperty => config.failure_property, :failOnViolation => config.fail_on_error,
           :maxErrors => config.errors, :maxWarnings => config.warnings do
           includes, excludes = config.includes, config.excludes
           src_dirs = config.sources
@@ -94,7 +117,7 @@ module Buildr
               end
             end
           end
-          config.ant.formatter :type => :xml, :tofile => config.data_file
+          config.ant.formatter :type => :xml, :tofile => config.output_file
         end
       end
 
@@ -102,27 +125,35 @@ module Buildr
       def create_html(config)
         target = config.html_out
         info "Creating checkstyle html report '#{target}'"
-        config.ant.xslt :in => config.data_file, :out => target,
+        config.ant.xslt :in => config.output_file, :out => target,
           :style => config.style
       end
 =end
 
       # Cleans the checkstyle created artifacts
       def clean(config)
-        #rm_rf [config.report_to, config.data_file]
+        #rm_rf [config.report_to, config.output_file]
       end
     end
 
     class FindbugsConfig # :nodoc:
 
       def initialize(project)
+        puts "FindbugsConfig initialized"
         @project = project
       end
 
-      attr_writer :data_file
+      attr_writer :output_file
       
       attr_reader :project
       private :project
+
+      def ant
+        @ant ||= Buildr.ant('findbugs') do |ant|
+          cp = Buildr.artifacts(Findbugs.dependencies).each(&:invoke).map(&:to_s).join(File::PATH_SEPARATOR)
+          ant.taskdef :name=>'findbugs', :classpath=>cp, :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask'
+        end
+      end
 
       def failure_property
         'findbugs.failure.property'
@@ -136,237 +167,251 @@ module Buildr
         report_to('findbugs-report.html')
       end
 
-      def ant
-        @ant ||= Buildr.ant('findbugs') do |ant|
-          cp = Buildr.artifacts(Findbugs.dependencies).each(&:invoke).map(&:to_s).join(File::PATH_SEPARATOR)
-          ant.taskdef :name=>'findbugs', :classpath=>cp, :classname=>'edu.umd.cs.findbugs.anttask.FindBugsTask'
-        end
+=begin
+      config.ant.findbugs :home=>config.findbugs_home, :output => "text", :effort => config.effort do
+        config.ant.auxClasspath = config.aux_classpath
+        config.ant.srcPath :path => config.src_path
+        config.ant.class :location => config.class_location
       end
+=end
 
       # :call-seq:
-      #   project.checkstyle.report_dir(dir)
+      #   project.findbugs.findbugs_home(dir)
       #
-      def report_dir(*dir)
+      def findbugs_home(*dir)
         if dir.empty?
-          @report_dir ||= project.path_to(:reports, :findbugs)
+          @findbugs_home ||= project.path_to(:findbugs)
         else
-          raise "Invalid report dir '#{dir.join(', ')}" unless dir.size == 1
-          @report_dir = dir[0]
+          raise "Invalid findbugs home dir '#{dir.join(', ')}" unless dir.size == 1
+          @findbugs_home = dir[0]
           self
         end
       end
 
       # :call-seq:
-      #   project.checkstyle.data_file(file)
+      #   project.findbugs.aux_classpath(classpath)
       #
-      def data_file(*file)
-        if file.empty?
-          @data_file ||= project.path_to(:reports, 'checkstyle.data')
+      # Valid values: min, default, or max
+      #
+      def effort(*effort)
+        if effort.empty?
+          @effort ||= "default"
         else
-          raise "Invalid report dir '#{file.join(', ')}" unless file.size == 1
-          @data_file = file[0]
+          raise "Invalid effort '#{effort.join(', ')}" unless effort.size == 1
+          @effort = effort[0]
+          self
+        end
+      end
+      
+      # :call-seq:
+      #   project.findbugs.aux_classpath(classpath)
+      #
+      def aux_classpath(*classpath)
+        if classpath.empty?
+          @aux_classpath ||= nil # project.compile.dependencies.join(File::PATH_SEPARATOR)
+        else
+          raise "Invalid aux classpath '#{classpath.join(', ')}" unless classpath.size == 1
+          @aux_classpath = classpath[0]
           self
         end
       end
 
       # :call-seq:
-      #   project.checkstyle.config(config_file)
+      #   project.findbugs.src_path(*sources)
       #
-      def config(*file)
-        if file.empty?
-          @config_file
-        else
-          raise "Invalid config file '#{file.join(', ')}" unless file.size == 1
-          @config_file = file[0]
-          self
-        end
-      end
-
-      # :call-seq:
-      #   project.checkstyle.style(html_style)
-      #
-      def style(*html_style)
-        if html_style.empty?
-          @html_style
-        else
-          raise "Invalid html style file '#{html_style.join(', ')}" unless html_style.size == 1
-          @html_style = html_style[0]
-          self
-        end
-      end
-
-      # :call-seq:
-      #   project.checkstyle.fail_on_violation(fail_on_violation)
-      #
-      def fail_on_violation(*fail_on_violation)
-        if fail_on_violation.empty?
-          @fail ||= (Findbugs.settings['fail.on.violation'] || true).to_s
-        else
-          raise "Invalid config file '#{fail_on_violation.join(', ')}" unless fail_on_violation.size == 1
-          @fail = fail_on_violation[0]
-          self
-        end
-      end
-
-      # :call-seq:
-      #   project.checkstyle.errors(max_errors)
-      #
-      def errors(*max_errors)
-        if max_errors.empty?
-          @max_errors ||= (Findbugs.settings['max.errors'] || 0).to_s
-        else
-          raise "Invalid max errors value '#{max_errors.join(', ')}" unless max_errors.size == 1
-          @max_errors = max_errors[0]
-          self
-        end
-      end
-
-      # :call-seq:
-      #   project.checkstyle.warnings(max_warnings)
-      #
-      def warnings(*max_warnings)
-        if max_warnings.empty?
-          @max_warnings ||= (Findbugs.settings['max.warnings'] || 0).to_s
-        else
-          raise "Invalid max warnings value '#{max_warnings.join(', ')}" unless max_warnings.size == 1
-          @max_warnings = max_warnings[0]
-          self
-        end
-      end
-
-      # :call-seq:
-      #   project.checkstyle.sources(*sources)
-      #
-      def sources(*sources)
+      def src_path(*sources)
         if sources.empty?
-          @sources ||= project.compile.sources
+          @src_path ||= project.compile.sources.join(File::PATH_SEPARATOR)
         else
-          @sources = [sources].flatten.uniq
+          @src_path = [sources].flatten.uniq
           self
         end
       end
 
       # :call-seq:
-      #   project.checkstyle.include(*class_patterns)
+      #   project.findbugs.class_location(dir)
       #
-      def include(*class_patterns)
-        includes.push(*class_patterns.map { |p| String === p ? Regexp.new(p) : p })
-        self
+      def class_location(*dir)
+        if dir.empty?
+          @class_location ||= project.compile.target
+        else
+          raise "Invalid class location directory '#{dir.join(', ')}" unless dir.size == 1
+          @class_location = dir[0]
+          self
+        end
       end
 
-      def includes
-        @include_classes ||= []
+
+      # :call-seq:
+      #   project.findbugs.output_file(file)
+      #
+      def output_file(*file)
+        if file.empty?
+          @output_file ||= project.path_to(:reports, 'findbugs.out')
+        else
+          raise "Invalid output file '#{file.join(', ')}" unless file.size == 1
+          @output_file = file[0]
+          self
+        end
       end
 
       # :call-seq:
-      #   project.checkstyle.exclude(*class_patterns)
+      #   project.findbugs.stylesheet(file)
       #
-      def exclude(*class_patterns)
-        excludes.push(*class_patterns.map { |p| String === p ? Regexp.new(p) : p })
-        self
+      def stylesheet(*file)
+        if file.empty?
+          @stylesheet
+        else
+          raise "Invalid stylesheet file '#{file.join(', ')}" unless file.size == 1
+          @stylesheet = file[0]
+          self
+        end
       end
 
-      def excludes
-        @exclude_classes ||= []
+      # :call-seq:
+      #   project.findbugs.fail_on_error(fail_on_error)
+      #
+      def fail_on_error(*fail_on_error)
+        if fail_on_error.empty?
+          @fail ||= (Findbugs.settings['failOnError'] || true).to_s
+        else
+          raise "Invalid config file '#{fail_on_error.join(', ')}" unless fail_on_error.size == 1
+          @fail = fail_on_error[0]
+          self
+        end
       end
+
+      # :call-seq:
+      #   project.findbugs.include_filter(file)
+      #
+      def include_filter(*file)
+        if file.empty?
+          @include_filter
+        else
+          raise "Invalid include filter file '#{file.join(', ')}" unless file.size == 1
+          @include_filter = file[0]
+          self
+        end
+      end
+
+      # :call-seq:
+      #   project.findbugs.exclude_filter(file)
+      #
+      def exclude_filter(*file)
+        if file.empty?
+          @exclude_filter
+        else
+          raise "Invalid exclude filter file '#{file.join(', ')}" unless file.size == 1
+          @exclude_filter = file[0]
+          self
+        end
+      end
+      
     end
 
     module FindbugsExtension # :nodoc:
       include Buildr::Extension
 
       def findbugs
+        puts "FindbugsExtension.findbugs invoked"
         @findbugs_config ||= FindbugsConfig.new(self)
       end
 
       before_define do
-        namespace 'checkstyle' do
+        namespace 'findbugs' do
+          desc "Creates a findbugs text report"
+          task :text
+      
           desc "Creates an findbugs xml report"
           task :xml
 
           desc "Creates an findbugs html report"
           task :html
-
-          desc "Fails the build if findbugs detected to many errors or warnings"
-          task :fail_on_violation
         end
       end
 
       after_define do |project|
-        checkstyle = project.checkstyle
+        findbugs = project.findbugs
 
-        namespace 'checkstyle' do
+        namespace 'findbugs' do
           unless project.compile.target.nil?
             # all target files and dirs as targets
-            checkstyle_xml = file checkstyle.data_file do
-              Checkstyle.create_xml(checkstyle)
+            findbugs_xml = file findbugs.output_file do
+              Findbugs.create_xml(findbugs)
             end
-            checkstyle_html = file checkstyle.html_out => checkstyle_xml do
-              Checkstyle.create_html(checkstyle)
+            #findbugs_html = file findbugs.html_out => findbugs_xml do
+            #  Findbugs.create_html(findbugs)
+            #end
+            #file findbugs.report_to => findbugs_html
+            
+            task :text do
+              puts "foo"
+              Findbugs.create_text(findbugs)
             end
-            file checkstyle.report_to => checkstyle_html
+            task :xml => findbugs_xml
+            #task :html => findbugs_html
 
-            task :xml => checkstyle_xml
-            task :html => checkstyle_html
-
-            task :checkstyle_lenient do
-              info "Setting checkstyle to ignore violations"
-              project.checkstyle.fail_on_violation(false)
+            task :findbugs_lenient do
+              info "Setting findbugs to ignore violations"
+              project.findbugs.fail_on_error(false)
             end
 
-            task :fail_on_violation => [:checkstyle_lenient, :xml] do
-              property = checkstyle.ant.project.properties.find { |current| current[0] == checkstyle.failure_property }
+            task :fail_on_error => [:findbugs_lenient, :xml] do
+              property = findbugs.ant.project.properties.find { |current| current[0] == findbugs.failure_property }
               property = property.nil? ? nil : property[1]
-              fail "To many checkstyle errors or warnings see reports in '#{checkstyle.report_to}'" if property
+              fail "To many findbugs errors or warnings see reports in '#{findbugs.report_to}'" if property
             end
           end
 
           project.clean do
-            Checkstyle.clean(checkstyle)
+            Findbugs.clean(findbugs)
           end
         end
       end
     end
 
     class Buildr::Project
-      include CheckstyleExtension
+      include FindbugsExtension
     end
 
-    namespace "checkstyle" do
-      checkstyle_xml = file checkstyle.data_file do
-        checkstyle.sources(Buildr.projects.map(&:checkstyle).map(&:sources).flatten)
-        unless checkstyle.config
-          configs = Buildr.projects.map(&:checkstyle).map(&:config).uniq.reject {|conf|
+=begin
+    namespace "findbugs" do
+      findbugs_xml = file findbugs.output_file do
+        findbugs.sources(Buildr.projects.map(&:findbugs).map(&:sources).flatten)
+        unless findbugs.config
+          configs = Buildr.projects.map(&:findbugs).map(&:config).uniq.reject {|conf|
             conf.nil? || conf.strip.empty?
           }
-          raise "Could not set checkstyle config from projects, existing configs: '#{configs.join(', ')}'" if configs.size != 1
-          info "Setting checkstyle config to '#{configs[0]}'"
-          checkstyle.config(configs[0])
+          raise "Could not set findbugs config from projects, existing configs: '#{configs.join(', ')}'" if configs.size != 1
+          info "Setting findbugs config to '#{configs[0]}'"
+          findbugs.config(configs[0])
         end
-        create_xml(checkstyle)
+        create_xml(findbugs)
       end
-      checkstyle_html = file checkstyle.html_out => checkstyle_xml do
-        unless checkstyle.style
-          styles = Buildr.projects.map(&:checkstyle).map(&:style).uniq.reject{|style|
+      findbugs_html = file findbugs.html_out => findbugs_xml do
+        unless findbugs.style
+          styles = Buildr.projects.map(&:findbugs).map(&:style).uniq.reject{|style|
             style.nil? || style.strip.empty?
           }
           raise "Could not set html style from projects, existing styles: '#{styles.join(', ')}'" if styles.size != 1
-          info "Setting checkstyle html style to '#{styles[0]}'"
-          checkstyle.style(styles[0])
+          info "Setting findbugs html style to '#{styles[0]}'"
+          findbugs.style(styles[0])
         end
-        create_html(checkstyle)
+        create_html(findbugs)
       end
-      file checkstyle.report_to => checkstyle_html
+      file findbugs.report_to => findbugs_html
       
-      desc "Create checkstyle xml report in #{checkstyle.report_to.to_s}"
-      task :xml => checkstyle_xml
+      desc "Create findbugs xml report in #{findbugs.report_to.to_s}"
+      task :xml => findbugs_xml
 
-      desc "Create checkstyle html report in #{checkstyle.report_to.to_s}"
-      task :html =>checkstyle_html
+      desc "Create findbugs html report in #{findbugs.report_to.to_s}"
+      task :html =>findbugs_html
         
     end
+=end
 
     task "clean" do
-      clean(checkstyle)
+      clean(findbugs)
     end
   end
 end
