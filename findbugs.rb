@@ -58,7 +58,6 @@ module Buildr
           end
           config.ant.sourcePath :path => config.src_path
           config.ant.method_missing :class, :location => config.class_location
-          #config.ant.auxAnalyzepath :location => config.class_location
         end
       end
 
