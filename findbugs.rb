@@ -350,7 +350,7 @@ module Buildr
         namespace 'findbugs' do
           unless project.compile.target.nil?
             # all target files and dirs as targets
-            findbugs_xml = file findbugs.output_file do
+            findbugs_xml = file findbugs.output_file => project.compile do
               Findbugs.create_xml(findbugs)
             end
             #findbugs_html = file findbugs.html_out => findbugs_xml do
@@ -358,7 +358,7 @@ module Buildr
             #end
             #file findbugs.report_to => findbugs_html
             
-            task :text do
+            task :text => project.compile do
               puts "foo"
               Findbugs.create_text(findbugs)
             end
