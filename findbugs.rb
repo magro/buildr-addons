@@ -52,9 +52,9 @@ module Buildr
             :effort => config.effort,
             :failOnError => config.fail_on_error do
           #    puts "attributes: #{config.ant.inspect}"
-          puts "auxclasspath: #{config.aux_classpath}, #{config.aux_classpath == nil}"
+          #puts "auxclasspath: #{config.aux_classpath}, #{config.aux_classpath == nil}"
           if config.aux_classpath != nil
-            config.ant.auxClasspath = config.aux_classpath
+            config.ant.auxClasspath :path => config.aux_classpath
           end
           config.ant.sourcePath :path => config.src_path
           config.ant.method_missing :class, :location => config.class_location
@@ -208,7 +208,7 @@ module Buildr
       #
       def aux_classpath(*classpath)
         if classpath.empty?
-          @aux_classpath ||= nil # project.compile.dependencies.join(File::PATH_SEPARATOR)
+          @aux_classpath ||= project.compile.dependencies.join(File::PATH_SEPARATOR)
         else
           raise "Invalid aux classpath '#{classpath.join(', ')}" unless classpath.size == 1
           @aux_classpath = classpath[0]
