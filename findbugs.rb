@@ -328,7 +328,6 @@ module Buildr
       include Buildr::Extension
 
       def findbugs
-        puts "FindbugsExtension.findbugs invoked"
         @findbugs_config ||= FindbugsConfig.new(self)
       end
 
