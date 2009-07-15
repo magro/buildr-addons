@@ -69,9 +69,11 @@ module Buildr
             :outputFile => config.findbugs.output_file,
             :effort => config.effort,
             :failOnError => config.fail_on_error do
-          config.ant.auxClasspath = config.aux_classpath
+          if config.aux_classpath != nil
+            config.ant.auxClasspath :path => config.aux_classpath
+          end
           config.ant.sourcePath :path => config.src_path
-          #config.ant.class :location => config.class_location
+          config.ant.method_missing :class, :location => config.class_location
         end
       end
       
