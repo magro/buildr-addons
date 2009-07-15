@@ -49,6 +49,7 @@ module Buildr
         info "Running findbugs with results printed to stdout"
         config.ant.findbugs :home=>config.findbugs_home,
             :output => "text",
+            :debug => config.debug,
             :effort => config.effort,
             :failOnError => config.fail_on_error do
           #    puts "attributes: #{config.ant.inspect}"
@@ -200,6 +201,19 @@ module Buildr
         else
           raise "Invalid effort '#{effort.join(', ')}" unless effort.size == 1
           @effort = effort[0]
+          self
+        end
+      end
+
+      # :call-seq:
+      #   project.findbugs.debug(bool)
+      #
+      def debug(*bool)
+        if bool.empty?
+          @debug ||= (Findbugs.settings['debug'] || false).to_s
+        else
+          raise "Invalid debug '#{bool.join(', ')}" unless bool.size == 1
+          @debug = bool[0]
           self
         end
       end
